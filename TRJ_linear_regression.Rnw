@@ -1,0 +1,373 @@
+\documentclass{tufte-book}
+\usepackage{graphicx}  % werken met figuren
+\usepackage{gensymb} % werken met wetenschappelijke eenheden\usepackage{geometry}
+\usepackage{changepage} % http://ctan.org/pkg/changepage
+\usepackage[dutch,british]{babel} % instelling van de taal (woordsplitsing, spellingscontrole)
+\usepackage[parfill]{parskip} % Paragrafen gescheiden door witte lijn en geen inspringing
+\usepackage[font=small,skip=3pt]{caption} % Minder ruimte tussen figuur/table en ondertitel. Ondertitel klein
+\usepackage{capt-of}
+\usepackage{indentfirst}
+\setlength{\parindent}{0.7cm}
+\usepackage{enumitem} % Laat enumerate werken met letters
+\usepackage{url}
+\usepackage{lipsum}
+\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+% Prints a trailing space in a smart way.
+\usepackage{xspace}
+\usepackage{hyperref}
+\usepackage{amsmath}
+
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
+
+% Alter some LaTeX defaults for better treatment of figures:
+% See p.105 of "TeX Unbound" for suggested values.
+% See pp. 199-200 of Lamport's "LaTeX" book for details.
+%   General parameters, for ALL pages:
+    \renewcommand{\topfraction}{0.9}	% max fraction of floats at top
+    \renewcommand{\bottomfraction}{0.9}	% max fraction of floats at bottom
+%   Parameters for TEXT pages (not float pages):
+    \setcounter{topnumber}{2}
+    \setcounter{bottomnumber}{2}
+    \setcounter{totalnumber}{4}     % 2 may work better
+    \renewcommand{\textfraction}{0.1}	% allow minimal text w. figs
+%   Parameters for FLOAT pages (not text pages):
+    \renewcommand{\floatpagefraction}{0.8}	% require fuller float pages
+% N.B.: floatpagefraction MUST be less than topfraction !!
+\setcounter{secnumdepth}{3}
+
+\newcommand{\tthdump}[1]{#1}
+
+\newcommand{\openepigraph}[2]{
+  \begin{fullwidth}
+  \sffamily\large
+    \begin{doublespace}
+      \noindent\allcaps{#1}\\ % epigraph
+      \noindent\allcaps{#2} % author
+    \end{doublespace}
+  \end{fullwidth}
+}
+
+
+\usepackage{makeidx}
+\makeindex
+
+\title{Univariate Linear Regression Document}
+\author{Jan Trommelmans}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE,prefix.string=TRJLinReg}
+\setkeys{Gin}{width=1.1\marginparwidth} %% Sweave
+
+<<echo=FALSE>>=
+library(DataExplorer)
+library(tidyverse)
+library(broom)
+library(gridExtra)
+library(nortest)
+library(car)
+@
+
+% Setting the ggplot theme:
+<<echo=FALSE>>=
+JT.theme <- theme(panel.border = element_rect(fill = NA, colour = "gray10"),
+                  panel.background = element_blank(),
+                  panel.grid.major = element_line(colour = "gray85"),
+                  panel.grid.minor = element_line(colour = "gray85"),
+                  panel.grid.major.x = element_line(colour = "gray85"),
+                  axis.text = element_text(size = 7 , face = "bold"),
+                  axis.title = element_text(size = 8 , face = "bold"),
+                  plot.title = element_text(size = 10 , face = "bold"),
+                  strip.text = element_text(size = 7 , face = "bold"),
+                  strip.background = element_rect(colour = "black"),
+                  legend.text = element_text(size = 7),
+                  legend.title = element_text(size = 8 , face = "bold"),
+                  legend.background = element_rect(fill = "white"),
+                  legend.key = element_rect(fill = "white"))
+@
+
+% Functions
+
+\mainmatter
+
+\chapter{Data and Exploratory Data Analysis}
+\section{Data input}
+Put the experimental results $(x_{i}, y_{i}$ into a data.frame called \textbf{geg} with column names \textbf{x} and \textbf{y} (Figure~\ref{fig:geg})
+
+% put in data
+<<echo=FALSE>>=
+geg <- read.csv("data/geg.csv", header=FALSE, sep=";", col.names=c("x","y"), na.strings=NA)
+n <- nrow(geg) # n is number of data points
+@
+
+<<label=geg,fig=TRUE,include=FALSE, echo=FALSE>>=
+xmin <- min(geg$x) - 0.2*(abs(min(geg$x)))
+xmax <- max(geg$x) + 0.1*(abs(max(geg$x)))
+ymin <- min(geg$y) - 0.2*(abs(min(geg$y)))
+ymax <- max(geg$y) + 0.1*(abs(max(geg$y)))
+ggplot(data=geg) +
+  geom_point(aes(x = x, y = y)) +
+  xlim(xmin, xmax) +
+  ylim(ymin, ymax) +
+  labs(title = "Data", x = "independent variable x", y = "responsvariable y") +
+  JT.theme
+@
+
+\begin{marginfigure}[0cm]
+\includegraphics[width=1\textwidth]{TRJLinReg-geg}
+\caption{ }
+\label{fig:geg}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{marginfigure}
+
+
+\section{Exploratory Data Analysis}
+Basic:
+<<>>=
+dim(geg)
+summary(geg)
+object.size(geg)
+@
+\newpage
+Using the \emph{DataExplorer}-package we get the following information on \emph{missing data} and \emph{histogram} of the data (Figure~\ref{fig:hist})
+
+<<>>=
+pmis <- plot_missing(geg)
+pmis
+@
+
+<<label=hist,fig=TRUE,include=FALSE, echo=FALSE>>=
+plot_histogram(geg)
+@
+
+\begin{marginfigure}[-3cm]
+\includegraphics[width=1\textwidth]{TRJLinReg-hist}
+\caption{ }
+\label{fig:hist}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{marginfigure}
+
+\chapter{The linear model}
+
+\section{Constructing the linear model}
+Detailed information of the model is found with the \emph{broom}-package and stored in a data.frames. Graphica representation in Figur~\ref{fig:linear_model_plot}.
+<<>>=
+lineair_model <- lm(y ~ x, data=geg)
+summary(lineair_model)
+tidy_linmod <- broom::tidy(lineair_model)
+tidy_linmod
+linmod <- broom::augment(lineair_model)
+@
+
+<<label=linear_model_plot,fig=TRUE,include=FALSE, echo=FALSE>>=
+ggplot(data=lineair_model$model, aes_string(x = names(lineair_model$model)[2], y = names(lineair_model$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") +
+  labs(title = paste("Adj R2 = ",signif(summary(lineair_model)$adj.r.squared, 5), " ",
+                     "b0 =",signif(lineair_model$coef[[1]],5 ), " ",
+                     "b1 =",signif(lineair_model$coef[[2]], 5), " ",
+                     "p =",signif(summary(lineair_model)$coef[2,4], 5))) +
+  JT.theme
+@
+
+\begin{marginfigure}[0cm]
+\includegraphics[width=1\textwidth]{TRJLinReg-linear_model_plot}
+\caption{ }
+\label{fig:linear_model_plot}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{marginfigure}
+
+\section{Anova analysis of the linear model}
+<<>>=
+anova(lineair_model)
+@
+
+\section{Making predictions based on the model}
+Data input required for the values of the independent variable at which predictions should be made.
+
+<<>>=
+pred_xh <- data.frame(x=seq(min(geg$x), max(geg$x), length.out = 5))
+@
+
+\subsection{Prediction of $\hat{y}_{h}$}
+<<>>=
+predict(lineair_model, pred_xh, interval= "confidence", level=0.95)
+@
+
+\subsection{Prediction of $y_{h}$} 
+<<>>=
+predict(lineair_model, pred_xh, interval= "predict", level=0.95)
+@
+
+\section{Checking the assumptions}
+\subsection{Constant variance of the error}
+\newthought{studentized residus}. (Figure~\ref{fig:studentized_resid}}
+<<label=studentized_resid,fig=TRUE,include=FALSE, echo=FALSE>>=
+xmin <- min(linmod$.fitted) - 0.2*(abs(min(linmod$.fitted)))
+xmax <- max(linmod$.fitted) + 0.1*(abs(max(linmod$.fitted)))
+ymin <- min(c(-3,min(linmod$.std.resid) - 0.2*(abs(min(linmod$.std.resid)))))
+ymax <- max(c(3,max(linmod$.std.resid) + 0.1*(abs(max(linmod$.std.resid)))))
+p1 <- ggplot(data=linmod, aes(x = .fitted, y = .std.resid)) +
+  geom_point() +
+  geom_text(label=rownames(linmod), nudge_x = 0.2*(abs(min(linmod$.fitted))), nudge_y = 0, size=2.5) +
+  geom_hline(yintercept=0, col="blue") +
+  geom_hline(yintercept=-2, col="red", linetype="dashed") +
+  geom_hline(yintercept=2, col="red", linetype="dashed") +
+  xlim(xmin, xmax) +
+  ylim(ymin, ymax) +
+  labs(title = "Checking for constant variance",
+       x = "Calculated value of y",
+       y = "Studentized Residu r") +
+  JT.theme
+p1
+@
+
+\begin{marginfigure}[0cm]
+\centering
+\includegraphics[width=1\textwidth]{TRJLinReg-studentized_resid}
+\caption{ }
+\label{fig:studentized_resid}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{marginfigure}
+
+\newthought{Scale-Location} (Figure~\ref{fig:scale_location})
+<<label=scale_location,fig=TRUE,include=FALSE, echo=FALSE>>=
+ymin <- -0.2*max(sqrt(abs(linmod$.std.resid)))
+ymax <- 1.1*max(sqrt(abs(linmod$.std.resid)))
+p3 <- ggplot(data=linmod, aes(x = .fitted, y = sqrt(abs(.std.resid)))) +
+  geom_point() +
+  geom_text(label=rownames(linmod), nudge_x = 0, nudge_y = 0.1*max(sqrt(abs(linmod$.std.resid))), size=2.5) +
+  xlim(xmin, xmax) +
+  ylim(ymin, ymax) +
+  geom_hline(yintercept=0, col="blue") +
+  labs(title = "Scale-Location",
+       x = "Calculated value of y",
+       y = expression(sqrt(abs("Studentized Residu r")))) +
+  JT.theme
+p3
+@
+
+\begin{marginfigure}[0cm]
+\centering
+\includegraphics[width=1\textwidth]{TRJLinReg-scale_location}
+\caption{ }
+\label{fig:scale_location}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{marginfigure}
+
+\newthought{Normality of the studentized residues} (Figure~\ref{fig:normality})
+<<label=normality,fig=TRUE,include=FALSE, echo=FALSE>>=
+kwantiel <- data.frame(q1=qqnorm(linmod$.std.resid, plot.it = FALSE)[[1]], q2=qqnorm(linmod$.std.resid, plot.it = FALSE)[[2]])
+xmin <- min(kwantiel$q1) - 0.2*(abs(min(kwantiel$q1)))
+xmax <- max(kwantiel$q1) + 0.1*(abs(max(kwantiel$q1)))
+ymin <- min(kwantiel$q2) - 0.2*(abs(min(kwantiel$q2)))
+ymax <- max(kwantiel$q2) + 0.1*(abs(max(kwantiel$q2)))
+p2 <- ggplot(kwantiel, aes(q1, q2)) +
+  geom_point(na.rm = TRUE, size=1) +
+  geom_text(label=rownames(kwantiel), nudge_x = 0.1*(abs(max(kwantiel$q2))), nudge_y = 0, size=2.5) +
+  geom_line(aes(x=q2, y=q2), linetype="dashed") +
+  xlim(min(xmin,ymin), max(xmax,ymax)) +
+  ylim(min(xmin,ymin), max(xmax,ymax)) +
+  xlab("Theor. Studentized Quantiles") +
+  ylab("Exp. Studentized Quantiles") +
+  ggtitle("Normplot studentized residus") +
+  JT.theme
+p2
+@
+
+\begin{marginfigure}
+\includegraphics[width=1\textwidth]{TRJLinReg-normality}
+\caption{ }
+\label{fig:normality}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{marginfigure}
+
+% 
+% <<>>=
+% shapiro.test(linmod$.std.resid)
+% ks.test(linmod$.std.resid, pnorm)
+% # if (n>6) {ad.test(linmod$.std.resid)}
+% @
+% 
+% 
+% We vinden die ook terug in de resultaten van het lineair model (Figuur~\ref{fig:Cooks_Distance}).
+% <<>>=
+% linmod$.cooksd
+% @
+% 
+% <<label=Cooks_Distance,fig=TRUE,include=FALSE, echo=FALSE>>=
+% p4 <- ggplot(linmod, aes(seq_along(.cooksd))) +
+%   geom_linerange(aes(ymin = rep(0,n), ymax = .cooksd), size=2) +
+%   xlab("Meetpunt") +
+%   ylab("Cook's distance") +
+%   ggtitle("Invloedrijke meetpunten", subtitle="Cook's distance") +
+%   JT.theme
+% p4
+% @
+% 
+% \begin{marginfigure}
+% \includegraphics[width=1\textwidth]{TRJLinReg-Cooks_Distance}
+% \caption{ }
+% \label{fig:Cooks_Distance}
+% \setfloatalignment{b}% forces caption to be bottom-aligned
+% \end{marginfigure}
+% 
+% 
+% 
+% <<label=Cooks_explained,fig=TRUE,include=FALSE, echo=FALSE>>=
+% xmin <- min(linmod$.hat) - 0.2*(abs(min(linmod$.hat)))
+% xmax <- max(linmod$.hat) + 0.2*(abs(max(linmod$.hat)))
+% ymin <- min(c(-3,min(linmod$.std.resid) - 0.2*(abs(min(linmod$.std.resid)))))
+% ymax <- max(c(3,max(linmod$.std.resid) + 0.2*(abs(max(linmod$.std.resid)))))
+% p5 <- ggplot(linmod, aes(.hat, .std.resid)) +
+%   geom_point(aes(size=.cooksd), na.rm=TRUE) +
+%   geom_text(label=rownames(linmod), nudge_x = 0.2*(abs(min(linmod$.hat))), nudge_y = 0, size=2.5) +
+%   xlim(xmin,xmax) +
+%   ylim(ymin,ymax) +
+%   xlab("Leverage hii") +
+%   ylab("Studentized Residus") +
+%   ggtitle("Invloedrijke meetpunten", subtitle="Residu ri i.f.v. leverage hii") +
+%   scale_size_continuous("Cook's Distance", range=c(1,5)) +
+%   JT.theme +
+%   theme(legend.position="right", legend.title=element_text(size=7) ,legend.text=element_text(size=5))
+% 
+% xmin <- min(linmod$.hat/(1-linmod$.hat)) - 0.2*(abs(min(linmod$.hat/(1-linmod$.hat))))
+% xmax <- max(linmod$.hat/(1-linmod$.hat)) + 0.2*(abs(max(linmod$.hat/(1-linmod$.hat))))
+% ymin <- min(linmod$.cooksd) - 0.2*(abs(min(linmod$.cooksd)))
+% ymax <- max(linmod$.cooksd) + 0.2*(abs(max(linmod$.cooksd)))   
+% p6 <- ggplot(linmod, aes(.hat/(1-.hat), .cooksd)) +
+%   geom_point(na.rm=TRUE) +
+%   geom_text(label=rownames(linmod), nudge_x = 0.2*(abs(min(linmod$.hat/(1-linmod$.hat)))), nudge_y = 0.01, size=2.5) +
+%   xlim(0,xmax) +
+%   ylim(ymin,ymax) +
+%   xlab("hii/(1-hii)") +
+%   ylab("Cook's Distance") +
+%   ggtitle("Invloedrijke meetpunten", subtitle="Cook's distance vs hii/(1-hii)") +
+%   geom_abline(slope=seq(0,3,0.5), color="gray", linetype="dashed") +
+%   JT.theme
+% 
+% grid.arrange(p5, p6,ncol=2)
+% @
+% 
+% \begin{figure}
+% \centering
+% \includegraphics[width=1\textwidth]{TRJLinReg-Cooks_explained}
+% \caption{ }
+% \label{fig:Cooks_explained}
+% \setfloatalignment{b}% forces caption to be bottom-aligned
+% \end{figure}
+% 
+% 
+% <<label=diagnostic_plots,fig=TRUE,include=FALSE, echo=FALSE>>=
+% grid.arrange(p1, p2, p3, p4, p5, p6, ncol=2)
+% @
+% 
+% \begin{figure*}
+% \centering
+% \includegraphics[width=1\textwidth]{TRJLinReg-diagnostic_plots}
+% \caption{ }
+% \label{fig:diagnostic_plots}
+% \setfloatalignment{b}% forces caption to be bottom-aligned
+% \end{figure*}
+
+
+\end{document}

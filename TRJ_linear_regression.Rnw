@@ -98,6 +98,7 @@ Put the experimental results $(x_{i}, y_{i}$ into a data.frame called \textbf{ge
 <<echo=FALSE>>=
 geg <- read.csv("data/geg.csv", header=FALSE, sep=";", col.names=c("x","y"), na.strings=NA)
 n <- nrow(geg) # n is number of data points
+m <- 2 # m is number of model parameters; for linear univariate regression m=2
 @
 
 <<label=geg,fig=TRUE,include=FALSE, echo=FALSE>>=
@@ -333,16 +334,16 @@ xmin <- min(kwantiel$q1) - 0.2*(abs(min(kwantiel$q1)))
 xmax <- max(kwantiel$q1) + 0.1*(abs(max(kwantiel$q1)))
 ymin <- min(kwantiel$q2) - 0.2*(abs(min(kwantiel$q2)))
 ymax <- max(kwantiel$q2) + 0.1*(abs(max(kwantiel$q2)))
-x1 <- as.numeric(quantile(kwantiel$q1)[2])
-x2 <- as.numeric(quantile(kwantiel$q1)[4])
-y1 <- as.numeric(quantile(kwantiel$q2)[2])
-y2 <- as.numeric(quantile(kwantiel$q2)[4])
+y1 <- quantile(linmod$.std.resid, 0.25)
+y2 <- quantile(linmod$.std.resid, 0.75)
+x1 <- qnorm(0.25)
+x2 <- qnorm(0.75)
 slope <- (y2-y1)/(x2-x1)
 interc <- y1 - x1*slope
 p2 <- ggplot(kwantiel, aes(q1, q2)) +
   geom_point(na.rm = TRUE, size=1) +
   geom_text(label=rownames(kwantiel), nudge_x = (xmax-xmin)/50, nudge_y = 0, size=2.5) +
-  geom_abline(slope=slope, intercept=interc, linetype="dashed", color="red") +
+  geom_abline(slope=slope, intercept=interc, color="blue") +
   xlim(min(xmin,ymin), max(xmax,ymax)) +
   ylim(min(xmin,ymin), max(xmax,ymax)) +
   xlab("Theor. Studentized Quantiles") +
@@ -370,7 +371,8 @@ ad.test(linmod$.std.resid)
 \subsection{Influential data points}
 <<label=Cooks_Distance,fig=TRUE,include=FALSE, echo=FALSE>>=
 p4 <- ggplot(linmod, aes(seq_along(.cooksd))) +
-  geom_linerange(aes(ymin = rep(0,n), ymax = .cooksd), size=2) +
+  geom_linerange(aes(ymin = rep(0,n), ymax = .cooksd), size=0.5) +
+  geom_hline(yintercept=(4/(n-m)), col="red") +
   xlab("Observation nr.") +
   ylab("Cook's distance") +
   ggtitle("Influential data points", subtitle="Cook's distance") +
@@ -386,62 +388,62 @@ p4
 \end{marginfigure}
 
 
-% 
-% <<label=Cooks_explained,fig=TRUE,include=FALSE, echo=FALSE>>=
-% xmin <- min(linmod$.hat) - 0.2*(abs(min(linmod$.hat)))
-% xmax <- max(linmod$.hat) + 0.2*(abs(max(linmod$.hat)))
-% ymin <- min(c(-3,min(linmod$.std.resid) - 0.2*(abs(min(linmod$.std.resid)))))
-% ymax <- max(c(3,max(linmod$.std.resid) + 0.2*(abs(max(linmod$.std.resid)))))
-% p5 <- ggplot(linmod, aes(.hat, .std.resid)) +
-%   geom_point(aes(size=.cooksd), na.rm=TRUE) +
-%   geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/50, nudge_y = 0, size=2.5) +
-%   xlim(xmin,xmax) +
-%   ylim(ymin,ymax) +
-%   xlab("Leverage hii") +
-%   ylab("Studentized Residus") +
-%   ggtitle("Invloedrijke meetpunten", subtitle="Residu ri i.f.v. leverage hii") +
-%   scale_size_continuous("Cook's Distance", range=c(1,5)) +
-%   JT.theme +
-%   theme(legend.position="right", legend.title=element_text(size=7) ,legend.text=element_text(size=5))
-% 
-% xmin <- min(linmod$.hat/(1-linmod$.hat)) - 0.2*(abs(min(linmod$.hat/(1-linmod$.hat))))
-% xmax <- max(linmod$.hat/(1-linmod$.hat)) + 0.2*(abs(max(linmod$.hat/(1-linmod$.hat))))
-% ymin <- min(linmod$.cooksd) - 0.2*(abs(min(linmod$.cooksd)))
-% ymax <- max(linmod$.cooksd) + 0.2*(abs(max(linmod$.cooksd)))   
-% p6 <- ggplot(linmod, aes(.hat/(1-.hat), .cooksd)) +
-%   geom_point(na.rm=TRUE) +
-%   geom_text(label=rownames(linmod), nudge_x = 0.2*(abs(min(linmod$.hat/(1-linmod$.hat)))), nudge_y = 0.01, size=2.5) +
-%   xlim(0,xmax) +
-%   ylim(ymin,ymax) +
-%   xlab("hii/(1-hii)") +
-%   ylab("Cook's Distance") +
-%   ggtitle("Invloedrijke meetpunten", subtitle="Cook's distance vs hii/(1-hii)") +
-%   geom_abline(slope=seq(0,3,0.5), color="gray", linetype="dashed") +
-%   JT.theme
-% 
-% grid.arrange(p5, p6,ncol=2)
-% @
-% 
-% \begin{figure}
-% \centering
-% \includegraphics[width=1\textwidth]{TRJLinReg-Cooks_explained}
-% \caption{ }
-% \label{fig:Cooks_explained}
-% \setfloatalignment{b}% forces caption to be bottom-aligned
-% \end{figure}
-% 
-% 
-% <<label=diagnostic_plots,fig=TRUE,include=FALSE, echo=FALSE>>=
-% grid.arrange(p1, p2, p3, p4, p5, p6, ncol=2)
-% @
-% 
-% \begin{figure*}
-% \centering
-% \includegraphics[width=1\textwidth]{TRJLinReg-diagnostic_plots}
-% \caption{ }
-% \label{fig:diagnostic_plots}
-% \setfloatalignment{b}% forces caption to be bottom-aligned
-% \end{figure*}
+
+<<label=Cooks_explained,fig=TRUE,include=FALSE, echo=FALSE>>=
+xmin <- min(linmod$.hat) - 0.2*(abs(min(linmod$.hat)))
+xmax <- max(linmod$.hat) + 0.1*(abs(max(linmod$.hat)))
+ymin <- min(c(-3,min(linmod$.std.resid) - 0.2*(abs(min(linmod$.std.resid)))))
+ymax <- max(c(3,max(linmod$.std.resid) + 0.1*(abs(max(linmod$.std.resid)))))
+p5 <- ggplot(linmod, aes(.hat, .std.resid)) +
+  geom_point(aes(size=.cooksd), na.rm=TRUE) +
+  geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/50, nudge_y = 0, size=2.5) +
+  geom_vline(xintercept=2*m/n, col="red") +
+  xlim(xmin,xmax) +
+  ylim(ymin,ymax) +
+  xlab("Leverage hii") +
+  ylab("Studentized Residus") +
+  ggtitle("Influential data points", subtitle="Residu ri vs. leverage hii") +
+  scale_size_continuous("Cook's Distance", range=c(1,5)) +
+  JT.theme +
+  theme(legend.position="right", legend.title=element_text(size=7) ,legend.text=element_text(size=5))
+
+ymin <- min(linmod$.cooksd) - 0.2*(abs(min(linmod$.cooksd)))
+ymax <- max(linmod$.cooksd) + 0.2*(abs(max(linmod$.cooksd)))
+p6 <- ggplot(linmod, aes(.hat, .cooksd)) +
+  geom_point(na.rm=TRUE) +
+  geom_vline(xintercept=2*m/n, col="red") +
+  geom_text(label=rownames(linmod), nudge_x = (xmax - xmin)/50, nudge_y = 0.01, size=2.5) +
+  xlim(0,xmax) +
+  ylim(ymin,ymax) +
+  xlab("Leverage hii)") +
+  ylab("Cook's Distance") +
+  ggtitle("Influential data points", subtitle="Cook's distance vs hii") +
+  geom_abline(slope=seq(0,3,0.5), color="gray", linetype="dashed") +
+  JT.theme
+
+grid.arrange(p5, p6,ncol=2)
+@
+
+\begin{figure}
+\centering
+\includegraphics[width=1\textwidth]{TRJLinReg-Cooks_explained}
+\caption{ }
+\label{fig:Cooks_explained}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{figure}
+
+
+<<label=diagnostic_plots,fig=TRUE,include=FALSE, echo=FALSE>>=
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol=2)
+@
+
+\begin{figure*}
+\centering
+\includegraphics[width=1\textwidth]{TRJLinReg-diagnostic_plots}
+\caption{ }
+\label{fig:diagnostic_plots}
+\setfloatalignment{b}% forces caption to be bottom-aligned
+\end{figure*}
 
 
 \end{document}

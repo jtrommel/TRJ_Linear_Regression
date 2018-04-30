@@ -106,8 +106,9 @@ xmin <- min(geg$x) - 0.2*(abs(min(geg$x)))
 xmax <- max(geg$x) + 0.1*(abs(max(geg$x)))
 ymin <- min(geg$y) - 0.2*(abs(min(geg$y)))
 ymax <- max(geg$y) + 0.1*(abs(max(geg$y)))
-ggplot(data=geg) +
-  geom_point(aes(x = x, y = y)) +
+ggplot(data=geg, aes(x = x, y = y)) +
+  geom_point() +
+  geom_text(label=rownames(geg), nudge_x = (xmax-xmin)/30, nudge_y = 0, size=2.5) +
   xlim(xmin, xmax) +
   ylim(ymin, ymax) +
   labs(title = "Data", x = "independent variable x", y = "response variable y") +
@@ -271,8 +272,19 @@ pred_y
 @
 
 \section{Checking the assumptions}
-\subsection{Constant variance of the error}
-\newthought{studentized residus}. (Figure~\ref{fig:studentized_resid})
+
+\subsection{Check if the model is linear: $E(Y)=\beta_{0}+\beta_{1}x$}
+If this assumption is correct, it implies that the residuals $r_{i}$ are scattered randomly around the zero line. However, linearity can be masked if the variance of the error is not constant. Therefore non-linearity and non-constant variance of the errors overlap.
+
+\subsection{Check for constant variance of the error}
+
+\newthought{Goodness of fit test for constant variance}\sidenote{What to look for: p-values should be higher than 0.05}
+The package \textbf{car} bevat een \emph{goodness of fit}-test voor ''non-constant error variance":
+<<>>=
+ncvTest(lineair_model)
+@
+
+\newthought{Graphical check: studentized residuals vs calculated values $\hat{y}$} (Figure~\ref{fig:studentized_resid})\sidenote{What to look for: the studentized residuals should lie randomly scattered around the zero line}
 <<label=studentized_resid,fig=TRUE,include=FALSE, echo=FALSE>>=
 xmin <- min(linmod$.fitted) - 0.2*(abs(min(linmod$.fitted)))
 xmax <- max(linmod$.fitted) + 0.1*(abs(max(linmod$.fitted)))
@@ -280,6 +292,7 @@ ymin <- min(c(-3,min(linmod$.std.resid) - 0.2*(abs(min(linmod$.std.resid)))))
 ymax <- max(c(3,max(linmod$.std.resid) + 0.1*(abs(max(linmod$.std.resid)))))
 p1 <- ggplot(data=linmod, aes(x = .fitted, y = .std.resid)) +
   geom_point() +
+  geom_smooth(method="loess") +
   geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/50, nudge_y = 0, size=2.5) +
   geom_hline(yintercept=0, col="blue") +
   geom_hline(yintercept=-2, col="red", linetype="dashed") +
@@ -293,24 +306,29 @@ p1 <- ggplot(data=linmod, aes(x = .fitted, y = .std.resid)) +
 p1
 @
 
-\begin{marginfigure}[0cm]
+\begin{figure}
 \centering
-\includegraphics[width=1\textwidth]{TRJLinReg-studentized_resid}
+\includegraphics[width=0.8\textwidth]{TRJLinReg-studentized_resid}
 \caption{ }
 \label{fig:studentized_resid}
 \setfloatalignment{b}% forces caption to be bottom-aligned
-\end{marginfigure}
+\end{figure}
 
-\newthought{Scale-Location} (Figure~\ref{fig:scale_location})
+A disadvantage of Figure~\ref{fig:studentized_resid} is that you have to keep an eye on positive and negative residus. You could imagine a funnel graph with both positive and negative residus increasing while the average would still lie on the zero line. 
+
+\newthought{Graphical check: sqrt(abs(studentized residuals)) vs. calculated values $\hat{y}$} (Figure~\ref{fig:scale_location})\sidenote{What to look for: is there a pattern in the evolution of the residues as a function of the calculated values?}
+A ''Scale-Location"-graph uses the square root of the absolute value, and is always positive. You can see if there is a steady increase of decrease in de residuals (scale) as a function of the value of $\hat{y}_{i}$ (location).
 <<label=scale_location,fig=TRUE,include=FALSE, echo=FALSE>>=
 ymin <- -0.2*max(sqrt(abs(linmod$.std.resid)))
 ymax <- 1.1*max(sqrt(abs(linmod$.std.resid)))
 p3 <- ggplot(data=linmod, aes(x = .fitted, y = sqrt(abs(.std.resid)))) +
   geom_point() +
+  geom_smooth(method="loess") +
   geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/50, nudge_y = 0, size=2.5) +
+  geom_hline(yintercept=0, col="black") +
+  geom_hline(yintercept=sqrt(2), col="red", linetype="dashed") +
   xlim(xmin, xmax) +
   ylim(ymin, ymax) +
-  geom_hline(yintercept=0, col="blue") +
   labs(title = "Scale-Location",
        x = "Calculated value of y",
        y = expression(sqrt(abs("Studentized Residu r")))) +
@@ -318,15 +336,25 @@ p3 <- ggplot(data=linmod, aes(x = .fitted, y = sqrt(abs(.std.resid)))) +
 p3
 @
 
-\begin{marginfigure}[0cm]
+\begin{figure}
 \centering
-\includegraphics[width=1\textwidth]{TRJLinReg-scale_location}
+\includegraphics[width=0.8\textwidth]{TRJLinReg-scale_location}
 \caption{ }
 \label{fig:scale_location}
 \setfloatalignment{b}% forces caption to be bottom-aligned
-\end{marginfigure}
+\end{figure}
+\newpage
+\subsection{Normality of the studentized residues} 
 
-\subsection{Normality of the studentized residues} (Figure~\ref{fig:normality})
+\newthought{Tests for normality}\sidenote{What to look for: p-values should be higher than 0.05}
+<<>>=
+shapiro.test(linmod$.std.resid)
+ks.test(linmod$.std.resid, pnorm)
+ad.test(linmod$.std.resid)
+@
+
+\newthought{Graphical check: actual quantiles of studentized residuals vs. theoretical quantiles}(Figure~\ref{fig:normality})\sidenote{What to look for: are the points near the theoretical line?}
+
 <<label=normality,fig=TRUE,include=FALSE, echo=FALSE>>=
 kwantiel <- data.frame(q1=qqnorm(linmod$.std.resid, plot.it = FALSE)[[1]], 
                        q2=qqnorm(linmod$.std.resid, plot.it = FALSE)[[2]])
@@ -353,22 +381,16 @@ p2 <- ggplot(kwantiel, aes(q1, q2)) +
 p2
 @
 
-\begin{marginfigure}
-\includegraphics[width=1\textwidth]{TRJLinReg-normality}
+\begin{figure}
+\centering
+\includegraphics[width=0.7\textwidth]{TRJLinReg-normality}
 \caption{ }
 \label{fig:normality}
 \setfloatalignment{b}% forces caption to be bottom-aligned
-\end{marginfigure}
+\end{figure}
 
-
-<<>>=
-shapiro.test(linmod$.std.resid)
-ks.test(linmod$.std.resid, pnorm)
-ad.test(linmod$.std.resid)
-@
-
-
-\subsection{Influential data points}
+\newpage
+\subsection{Influential data points}\sidenote{What to look for: data point with a large Cook's Distance have a large influence on the linear model}
 <<label=Cooks_Distance,fig=TRUE,include=FALSE, echo=FALSE>>=
 p4 <- ggplot(linmod, aes(seq_along(.cooksd))) +
   geom_linerange(aes(ymin = rep(0,n), ymax = .cooksd), size=0.5) +
@@ -380,53 +402,68 @@ p4 <- ggplot(linmod, aes(seq_along(.cooksd))) +
 p4
 @
 
-\begin{marginfigure}
-\includegraphics[width=1\textwidth]{TRJLinReg-Cooks_Distance}
+\begin{figure}
+\centering
+\includegraphics[width=0.8\textwidth]{TRJLinReg-Cooks_Distance}
 \caption{ }
 \label{fig:Cooks_Distance}
 \setfloatalignment{b}% forces caption to be bottom-aligned
-\end{marginfigure}
+\end{figure}
 
-
+A large Cook's Distance, and thus a disproportional influence on the line describing the linear relationship, can be caused by large residuals and/or a high leverage. The leverage can be found as the diagonal elements of the ''hat"-matrix. You can split up these two causes by looking at Figure~\ref{fig:Cooks_explained}.\sidenote{What to look for: data points with high values of Cook's Distance should not be rejected (they are not outliers), but should be critically looked at. The causes for high Cook's Distance are high residuals and/or high leverage.}
 
 <<label=Cooks_explained,fig=TRUE,include=FALSE, echo=FALSE>>=
 xmin <- min(linmod$.hat) - 0.2*(abs(min(linmod$.hat)))
-xmax <- max(linmod$.hat) + 0.1*(abs(max(linmod$.hat)))
+xmax <- max(2*m/n,max(linmod$.hat)) + 0.1*(abs(max(linmod$.hat)))
 ymin <- min(c(-3,min(linmod$.std.resid) - 0.2*(abs(min(linmod$.std.resid)))))
 ymax <- max(c(3,max(linmod$.std.resid) + 0.1*(abs(max(linmod$.std.resid)))))
-p5 <- ggplot(linmod, aes(.hat, .std.resid)) +
-  geom_point(aes(size=.cooksd), na.rm=TRUE) +
-  geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/50, nudge_y = 0, size=2.5) +
+p5 <- ggplot(linmod, aes(.hat, .std.resid, fill=.cooksd)) +
+  geom_point(shape=21, size=2.5) +
+  scale_fill_gradient(low="green", high="red", guide=FALSE) +
+  geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/10, nudge_y = 0, size=2.5) +
   geom_vline(xintercept=2*m/n, col="red") +
   xlim(xmin,xmax) +
   ylim(ymin,ymax) +
   xlab("Leverage hii") +
   ylab("Studentized Residus") +
-  ggtitle("Influential data points", subtitle="Residu ri vs. leverage hii") +
-  scale_size_continuous("Cook's Distance", range=c(1,5)) +
-  JT.theme +
-  theme(legend.position="right", legend.title=element_text(size=7) ,legend.text=element_text(size=5))
+  ggtitle("Influential data points", subtitle="Studentized Residu vs leverage hii") +
+  JT.theme
 
 ymin <- min(linmod$.cooksd) - 0.2*(abs(min(linmod$.cooksd)))
-ymax <- max(linmod$.cooksd) + 0.2*(abs(max(linmod$.cooksd)))
-p6 <- ggplot(linmod, aes(.hat, .cooksd)) +
-  geom_point(na.rm=TRUE) +
+ymax <- max(linmod$.cooksd) + 0.1*(abs(max(linmod$.cooksd)))   
+p6 <- ggplot(linmod, aes(.hat, .cooksd, fill=.cooksd)) +
+  geom_point(shape=21, size=2.5) +
+  scale_fill_gradient(low="green", high="red", guide=FALSE) +
   geom_vline(xintercept=2*m/n, col="red") +
-  geom_text(label=rownames(linmod), nudge_x = (xmax - xmin)/50, nudge_y = 0.01, size=2.5) +
+  geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/10, nudge_y = 0, size=2.5) +
   xlim(0,xmax) +
   ylim(ymin,ymax) +
-  xlab("Leverage hii)") +
+  xlab("Leverage hii") +
   ylab("Cook's Distance") +
   ggtitle("Influential data points", subtitle="Cook's distance vs hii") +
   geom_abline(slope=seq(0,3,0.5), color="gray", linetype="dashed") +
   JT.theme
 
-grid.arrange(p5, p6,ncol=2)
+xmin <- min(linmod$.hat/(1-linmod$.hat)) - 0.2*(abs(min(linmod$.hat/(1-linmod$.hat))))
+xmax <- max(2*m/(n-2*m),max(linmod$.hat/(1-linmod$.hat))) + 0.1*(abs(max(linmod$.hat/(1-linmod$.hat))))
+p7 <- ggplot(linmod, aes(.hat/(1-.hat), .cooksd, fill=.cooksd)) +
+  geom_point(shape=21, size=2.5) +
+  scale_fill_gradient(low="green", high="red", guide=FALSE) +
+  geom_vline(xintercept=2*m/(n-2*m), col="red") +
+  geom_text(label=rownames(linmod), nudge_x = (xmax-xmin)/10, nudge_y = 0, size=2.5) +
+  xlim(0,xmax) +
+  ylim(ymin,ymax) +
+  xlab("hii/(1-hii)") +
+  ylab("Cook's Distance") +
+  ggtitle("Influential data points", subtitle="Cook's distance vs hii/(1-hii)") +
+  geom_abline(slope=seq(0,3,0.5), color="gray", linetype="dashed") +
+  JT.theme
+grid.arrange(p5, p6, p7, ncol=3)
 @
 
 \begin{figure}
 \centering
-\includegraphics[width=1\textwidth]{TRJLinReg-Cooks_explained}
+\includegraphics[width=0.7\textwidth]{TRJLinReg-Cooks_explained}
 \caption{ }
 \label{fig:Cooks_explained}
 \setfloatalignment{b}% forces caption to be bottom-aligned
